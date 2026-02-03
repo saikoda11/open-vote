@@ -22,4 +22,12 @@ https://doi.org/10.1155/2024/5591147
 
 > This paper seems to provide a good design prototype for off-chain and on-chain operations
 
+Voters get token from authority.
 
+Then they vote and provide ZKSMP to prove vote validity.
+
+Then it is added to the blockchain.
+
+The tally of their vote can be verified by public address.
+
+Proof of Authority validators mine and add the vote to chain.
