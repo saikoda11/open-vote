@@ -31,3 +31,11 @@ Then it is added to the blockchain.
 The tally of their vote can be verified by public address.
 
 Proof of Authority validators mine and add the vote to chain.
+
+# Blockchain for Electronic Voting System—Review and Open Research Challenges
+
+https://pmc.ncbi.nlm.nih.gov/articles/PMC8434614/pdf/sensors-21-05874.pdf
+
+The paper reviews current solutions on this topic.
+
+Can be used to select relevant solution to our project.
