@@ -39,3 +39,9 @@ https://pmc.ncbi.nlm.nih.gov/articles/PMC8434614/pdf/sensors-21-05874.pdf
 The paper reviews current solutions on this topic. They can be used to select relevant solution to our project.
 
 Also, the paper gives a good review on homomorphic encryption technologies that can be used in our project.
+
+# Cicada (Homomorphic Time Lock Puzzle for Electronic Voting)
+
+https://github.com/a16z/cicada?tab=readme-ov-file
+
+Contains interesting technology for electronic voting that can help with privacy and transparency.
