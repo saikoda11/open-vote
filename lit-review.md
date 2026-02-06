@@ -36,6 +36,6 @@ Proof of Authority validators mine and add the vote to chain.
 
 https://pmc.ncbi.nlm.nih.gov/articles/PMC8434614/pdf/sensors-21-05874.pdf
 
-The paper reviews current solutions on this topic.
+The paper reviews current solutions on this topic. They can be used to select relevant solution to our project.
 
-Can be used to select relevant solution to our project.
+Also, the paper gives a good review on homomorphic encryption technologies that can be used in our project.
