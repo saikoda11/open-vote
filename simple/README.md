@@ -3,5 +3,7 @@
 We implement:
 
 - blockchain based system for the easiest version of voting in Python
-- using PoA 
+- using PoA, allowing several validators
+- this version ignores double voting
+
 
