@@ -4,6 +4,7 @@ import json
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+from collections import Counter
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
@@ -39,29 +40,26 @@ def pubkey_from_raw(raw: bytes) -> Ed25519PublicKey:
 class Block:
     index: int
     timestamp: float
-    op: Dict[str, Any]       # only {"op":"append","value":...}
+    op: Dict[str, Any]       # {"op":"vote","voter_id":...,"choice":...}
     prev_hash: str
     validator_id: str
-    block_hash: str          # sha256(header_bytes) hex
-    signature_b64: str       # Ed25519 signature over header_bytes (base64)
+    block_hash: str          # sha256(header_bytes)
+    signature_b64: str       # Ed25519(signature over header_bytes)
 
 
-class PoABlockchainEd25519:
+class PoAVotingBlockchain:
     """
-    PoA membership: only approved validator public keys may sign blocks.
-    This is still a *single-node* toy chain (no networking/consensus),
-    but it enforces: authorized signer + valid signature + hash-links.
-
-    Optionally enforces a round-robin "leader schedule".
+    Simplest voting ledger:
+      - Append-only blocks
+      - Each block contains one vote: (voter_id, choice)
+      - NO double-vote prevention (duplicates allowed)
+      - PoA: only authorized validators can sign blocks
     """
 
     def __init__(self, authorities_pubkeys: Dict[str, bytes], enforce_round_robin: bool = True):
-        """
-        authorities_pubkeys: {validator_id -> public_key_raw_32bytes}
-        """
         if not authorities_pubkeys:
             raise ValueError("Need at least one authority public key.")
-        self.authorities_pubkeys = authorities_pubkeys
+        self.authorities_pubkeys = authorities_pubkeys  # {validator_id -> pubkey_raw}
         self.authority_ids = list(authorities_pubkeys.keys())
         self.enforce_round_robin = enforce_round_robin
         self.chain: List[Block] = [self._make_genesis_block()]
@@ -77,7 +75,6 @@ class PoABlockchainEd25519:
         prev_hash: str,
         validator_id: str,
     ) -> bytes:
-        # Canonical JSON => stable hash + signature
         header_obj = {
             "index": index,
             "timestamp": timestamp,
@@ -103,19 +100,13 @@ class PoABlockchainEd25519:
 
     def _make_genesis_block(self) -> Block:
         ts = time.time()
-        op = {"op": "append", "value": "__GENESIS__"}  # ignored in state()
-
+        op = {"op": "genesis"}
         validator_id = self._expected_validator(0)
-        self._assert_authorized_and_schedule(validator_id, 0)
 
         header = self._header_bytes(0, ts, op, "0" * 64, validator_id)
         block_hash = sha256_hex(header)
 
-        # For demo we cannot sign genesis unless we have some validator privkey.
-        # So we make genesis "unsigned" by choosing a convention: signature over header is empty.
-        # If you want genesis signed too, create chain with a known signer private key.
-        signature_b64 = b64e(b"")  # empty signature
-
+        # Genesis is unsigned by convention in this toy example
         return Block(
             index=0,
             timestamp=ts,
@@ -123,24 +114,34 @@ class PoABlockchainEd25519:
             prev_hash="0" * 64,
             validator_id=validator_id,
             block_hash=block_hash,
-            signature_b64=signature_b64,
+            signature_b64=b64e(b""),
         )
 
-    def append(self, value: Any, signer_private_key: Ed25519PrivateKey, validator_id: Optional[str] = None) -> Block:
+    def cast_vote(
+        self,
+        voter_id: str,
+        choice: str,
+        signer_private_key: Ed25519PrivateKey,
+        validator_id: Optional[str] = None,
+    ) -> Block:
         last = self.chain[-1]
         idx = last.index + 1
         ts = time.time()
-        op = {"op": "append", "value": value}
+
+        op = {
+            "op": "vote",
+            "voter_id": voter_id,
+            "choice": choice,
+        }
 
         if validator_id is None:
             validator_id = self._expected_validator(idx)
 
         self._assert_authorized_and_schedule(validator_id, idx)
 
-        # Ensure the provided private key corresponds to validator_id (prevents "sign as someone else")
+        # Ensure the signer key matches the validator_id public key
         signer_pub_raw = pubkey_raw(signer_private_key.public_key())
-        expected_pub_raw = self.authorities_pubkeys[validator_id]
-        if signer_pub_raw != expected_pub_raw:
+        if signer_pub_raw != self.authorities_pubkeys[validator_id]:
             raise ValueError("Signer private key does not match the validator_id public key.")
 
         header = self._header_bytes(idx, ts, op, last.block_hash, validator_id)
@@ -159,26 +160,29 @@ class PoABlockchainEd25519:
         self.chain.append(b)
         return b
 
-    def state(self) -> List[Any]:
-        out: List[Any] = []
-        for b in self.chain[1:]:  # ignore genesis
-            if b.op.get("op") != "append":
-                raise ValueError(f"Invalid operation in block {b.index}: {b.op}")
-            out.append(b.op.get("value"))
+    # --- Reading results ---
+
+    def votes(self) -> List[Tuple[str, str]]:
+        """Returns the raw list of votes as [(voter_id, choice), ...] (duplicates allowed)."""
+        out: List[Tuple[str, str]] = []
+        for b in self.chain[1:]:
+            if b.op.get("op") == "vote":
+                out.append((b.op["voter_id"], b.op["choice"]))
         return out
 
-    def print_list(self) -> None:
-        print(self.state())
+    def tally(self) -> Counter:
+        """Counts all votes. If someone voted twice, both are counted (as requested)."""
+        return Counter(choice for _, choice in self.votes())
 
     def verify(self) -> bool:
         for i, b in enumerate(self.chain):
-            # 1) authorized validator + schedule
+            # validator exists + optional schedule
             if b.validator_id not in self.authorities_pubkeys:
                 return False
             if self.enforce_round_robin and b.validator_id != self._expected_validator(b.index):
                 return False
 
-            # 2) prev hash link
+            # prev link
             if b.index == 0:
                 if b.prev_hash != "0" * 64:
                     return False
@@ -186,17 +190,19 @@ class PoABlockchainEd25519:
                 if b.prev_hash != self.chain[i - 1].block_hash:
                     return False
 
-            # 3) op validity (skip genesis)
-            if b.index != 0 and b.op.get("op") != "append":
-                return False
+            # op validity
+            if b.index != 0:
+                if b.op.get("op") != "vote":
+                    return False
+                if "voter_id" not in b.op or "choice" not in b.op:
+                    return False
 
-            # 4) hash correctness
+            # hash correctness
             header = self._header_bytes(b.index, b.timestamp, b.op, b.prev_hash, b.validator_id)
-            expected_hash = sha256_hex(header)
-            if b.block_hash != expected_hash:
+            if b.block_hash != sha256_hex(header):
                 return False
 
-            # 5) signature correctness (skip genesis here because we used empty signature convention)
+            # signature correctness (skip genesis)
             if b.index != 0:
                 pub = self._pub_for_validator(b.validator_id)
                 try:
@@ -207,31 +213,25 @@ class PoABlockchainEd25519:
         return True
 
 
-# --- Demo helpers ---
+# --- Demo / setup ---
 def make_validator(validator_id: str) -> Tuple[str, Ed25519PrivateKey, bytes]:
     priv = Ed25519PrivateKey.generate()
-    pub_raw = pubkey_raw(priv.public_key())
-    return validator_id, priv, pub_raw
+    return validator_id, priv, pubkey_raw(priv.public_key())
 
 
 if __name__ == "__main__":
-    # Create 3 validators (private keys stay local; public keys are shared)
-    v1_id, v1_priv, v1_pub = make_validator("commission")
-    v2_id, v2_priv, v2_pub = make_validator("observer_partyA")
-    v3_id, v3_priv, v3_pub = make_validator("observer_partyB")
+    # 2 authorities for demo
+    vA_id, vA_priv, vA_pub = make_validator("commission")
+    vB_id, vB_priv, vB_pub = make_validator("observer")
 
-    authorities = {v1_id: v1_pub, v2_id: v2_pub, v3_id: v3_pub}
+    authorities = {vA_id: vA_pub, vB_id: vB_pub}
+    bc = PoAVotingBlockchain(authorities_pubkeys=authorities, enforce_round_robin=True)
 
-    bc = PoABlockchainEd25519(authorities_pubkeys=authorities, enforce_round_robin=True)
+    # Round-robin: block1 -> observer, block2 -> commission, block3 -> observer, ...
+    bc.cast_vote("Alice", "Candidate_X", signer_private_key=vB_priv, validator_id="observer")
+    bc.cast_vote("Bob", "Candidate_Y", signer_private_key=vA_priv, validator_id="commission")
+    bc.cast_vote("Alice", "Candidate_X", signer_private_key=vB_priv, validator_id="observer")  # double vote allowed
 
-    # Round-robin expects: block1->observer_partyA, block2->observer_partyB, block3->commission, ...
-    bc.append("Alice", signer_private_key=v2_priv, validator_id="observer_partyA")
-    bc.append("Bob", signer_private_key=v3_priv, validator_id="observer_partyB")
-    bc.append(123, signer_private_key=v1_priv, validator_id="commission")
-
-    bc.print_list()                 # ['Alice', 'Bob', 123]
-    print("valid?", bc.verify())    # True
-
-    # Tamper demo (should fail verification)
-    bc.chain[2].op["value"] = "MALLORY"
-    print("valid after tamper?", bc.verify())  # False
+    print("Votes:", bc.votes())
+    print("Tally:", bc.tally())
+    print("Chain valid?", bc.verify())
