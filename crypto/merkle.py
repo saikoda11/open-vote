@@ -36,3 +36,9 @@ class MerkleTree:
             tree.append(next_level)
             level = next_level
         return tree
+
+    def proof(self, voter_pk: int):
+        """
+        TODO
+        """
+        pass
