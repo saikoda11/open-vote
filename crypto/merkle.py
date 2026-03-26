@@ -1,11 +1,14 @@
 import hashlib
-from typing import List
+from typing import List, Optional, Tuple
+
 
 def _hash_node(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
+
 def _hash_pair(left: str, right: str) -> str:
     return _hash_node(bytes.fromhex(left) + bytes.fromhex(right))
+
 
 class MerkleTree:
     def __init__(self, voter_pks: List[int]):
@@ -17,7 +20,8 @@ class MerkleTree:
             for pk in voter_pks
         ]
         self.tree: List[List[str]] = self.build()
-    
+
+
     def build(self):
         """
         Build the tree bottom-up. tree[0] = leaves, tree[-1] = [root].
@@ -36,6 +40,7 @@ class MerkleTree:
             tree.append(next_level)
             level = next_level
         return tree
+
 
     def proof(self, voter_pk: int):
         """
@@ -64,3 +69,22 @@ class MerkleTree:
             current_idx //= 2
 
         return idx, path
+
+
+def verify_merkle_proof(
+    voter_public_key: int,
+    leaf_index: int,
+    path: List[Tuple[str, str]],
+    root: str,
+) -> bool:
+    """
+    Verify a Merkle proof. Returns True iff voter_public_key is in the tree
+    with the given root.
+    """
+    current_hash = _hash_node(voter_public_key.to_bytes((voter_public_key.bit_length() + 7) // 8 or 1))
+    for sibling_hash, side in path:
+        if side == "right":
+            current_hash = _hash_pair(current_hash, sibling_hash)
+        else:
+            current_hash = _hash_pair(sibling_hash, current_hash)
+    return current_hash == root

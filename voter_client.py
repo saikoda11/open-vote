@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 import httpx
+from crypto.merkle import verify_merkle_proof
 
 class Vote:
     def __init__(self, voter_data: dict[str, Any]):
@@ -21,10 +22,15 @@ class Vote:
         return roll
     
     def validate(self, election_params: dict[str, str]):
-        # TODO validate: 
-        # check via merkle proof that client is in voters' merkle tree
-        # check that merkle root == merkle_root in election_params
-        pass
+        # verify Merkle root matches what's on-chain
+        if self.merkle_root != election_params["voter_roll_root"]:
+            print("[error] Merkle root mismatch — voter roll may have changed")
+            sys.exit(1)
+
+        # verify own membership
+        if not verify_merkle_proof(self.pk, self.leaf_index, self.merkle_proof, self.merkle_root):
+            print("[error] Merkle proof invalid — voter not in roll")
+            sys.exit(1)
     
     def to_ballot(self, election_params: dict[str, Any]):
         # TODO Build ballot with Nullifier, ZKP and encrypted message
