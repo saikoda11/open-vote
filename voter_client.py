@@ -1,13 +1,13 @@
 import argparse
 import sys
 import json
-from typing import Any
+from typing import Any, Dict
 
 import httpx
 from crypto.merkle import verify_merkle_proof
 
 class Vote:
-    def __init__(self, voter_data: dict[str, Any]):
+    def __init__(self, voter_data: Dict[str, Any]):
         self.voter_id: str = voter_data['voter_id']
         self.candidate = int(voter_data['candidate'])
         self.secret = int(voter_data["secret"])
@@ -21,7 +21,7 @@ class Vote:
         roll = Vote(voter_data=json)
         return roll
     
-    def validate(self, election_params: dict[str, str]):
+    def validate(self, election_params: Dict[str, str]):
         # verify Merkle root matches what's on-chain
         if self.merkle_root != election_params["voter_roll_root"]:
             print("[error] Merkle root mismatch — voter roll may have changed")
@@ -32,7 +32,7 @@ class Vote:
             print("[error] Merkle proof invalid — voter not in roll")
             sys.exit(1)
     
-    def to_ballot(self, election_params: dict[str, Any]):
+    def to_ballot(self, election_params: Dict[str, Any]):
         # TODO Build ballot with Nullifier, ZKP and encrypted message
         return None
 
