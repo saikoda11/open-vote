@@ -85,3 +85,32 @@ def partial_decrypt(
         cp_response=response,
     )
 
+
+def verify_partial_decryption(pd: PartialDecryption, pk_share: int, ct: Ciphertext) -> bool:
+    expected_challenge = hash_to_scalar(
+        G, ct.c1, pk_share, pd.di,
+        pd.cp_commitment_g, pd.cp_commitment_c1,
+        pd.authority_id,
+    )
+    if pd.cp_challenge != expected_challenge:
+        return False
+
+    # Check:  g^response * pk_share^challenge == commitment_g
+    lhs_g = group_mul(
+        group_exp(G,        pd.cp_response),
+        group_exp(pk_share, pd.cp_challenge),
+    )
+    if lhs_g != pd.cp_commitment_g:
+        return False
+
+    # Check:  C1^response * di^challenge == commitment_c1
+    lhs_c1 = group_mul(
+        group_exp(ct.c1, pd.cp_response),
+        group_exp(pd.di, pd.cp_challenge),
+    )
+    if lhs_c1 != pd.cp_commitment_c1:
+        return False
+
+    return True
+
+
