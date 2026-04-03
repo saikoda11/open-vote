@@ -114,3 +114,37 @@ def verify_partial_decryption(pd: PartialDecryption, pk_share: int, ct: Cipherte
     return True
 
 
+def combine_partial_decryptions(
+    partial_decryptions: List[PartialDecryption],
+    ct: Ciphertext,
+    threshold: int,
+    total: int,
+) -> int:
+    
+    assert len(partial_decryptions) >= threshold, "Not enough agents"
+
+    shares = partial_decryptions[:threshold]
+    indices = [pd.share_index for pd in shares]
+
+    D = 1
+    for pd in shares:
+        i = pd.share_index
+        lam = 1
+        for j in indices:
+            if j == i:
+                continue
+            num = j % Q
+            den = (j - i) % Q
+            lam = lam * num % Q * pow(den, Q - 2, Q) % Q
+        D = D * group_exp(pd.di, lam) % P
+
+    D_inv = pow(D, P - 2, P)
+    gv = ct.c2 * D_inv % P
+
+    g_power = 1
+    for v in range(10000):
+        if g_power == gv:
+            return v
+        g_power = g_power * G % P
+
+    raise ValueError("Could not recover tally, too many votes or decryption error")
