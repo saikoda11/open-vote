@@ -1,8 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
-from crypto.group import P, Q, G, rand_scalar, group_exp, group_mul
+from crypto.group import P, Q, G, group_exp, group_mul, group_inv, rand_scalar, hash_to_scalar
 
 @dataclass
 class Ciphertext:
@@ -30,3 +30,58 @@ def encrypt(vote: int, public_key: int) -> Tuple[Ciphertext, int]:
     pkr = group_exp(public_key, r) 
     c2 = group_mul(gv, pkr)
     return Ciphertext(c1, c2), r
+
+
+@dataclass
+class PartialDecryption: # Chaum-Pedersen proof
+    authority_id: str
+    share_index:  int    
+    di:           int     
+    
+    cp_commitment_g:   int  
+    cp_commitment_c1:  int  
+    cp_challenge:      int
+    cp_response:       int  
+
+    def to_dict(self) -> dict:
+        return {
+            "authority_id":     self.authority_id,
+            "share_index":      self.share_index,
+            "di":               self.di,
+            "cp_commitment_g":  self.cp_commitment_g,
+            "cp_commitment_c1": self.cp_commitment_c1,
+            "cp_challenge":     self.cp_challenge,
+            "cp_response":      self.cp_response,
+        }
+
+    @staticmethod
+    def from_dict(d: dict) -> "PartialDecryption":
+        return PartialDecryption(**{k: (int(v) if k != "authority_id" else v) for k, v in d.items()})
+
+
+def partial_decrypt(
+    authority_id: str,
+    share_index: int,
+    ski: int,        
+    pk_share: int,    
+    ct: Ciphertext,
+) -> PartialDecryption:
+    
+    di = group_exp(ct.c1, ski)
+
+    t = rand_scalar()
+    Rt_g  = group_exp(G, t) 
+    Rt_c1 = group_exp(ct.c1, t)  
+    challenge = hash_to_scalar(G, ct.c1, pk_share, di, Rt_g, Rt_c1, authority_id)
+    response = (t - challenge * ski) % Q
+
+    return PartialDecryption(
+        authority_id=authority_id,
+        share_index=share_index,
+        di=di,
+        cp_commitment_g=Rt_g,
+        cp_commitment_c1=Rt_c1,
+        cp_challenge=challenge,
+        cp_response=response,
+    )
+
