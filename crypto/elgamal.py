@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from crypto.group import P, Q, G, group_exp, group_mul, group_inv, rand_scalar, hash_to_scalar
+from crypto.prime_group import P, Q, G, group_exp, group_mul, group_inv, rand_scalar, hash_to_scalar
 
 @dataclass
 class Ciphertext:
