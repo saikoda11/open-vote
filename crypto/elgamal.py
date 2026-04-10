@@ -31,6 +31,11 @@ def encrypt(vote: int, public_key: int) -> Tuple[Ciphertext, int]:
     c2 = group_mul(gv, pkr)
     return Ciphertext(c1, c2), r
 
+def combine_ciphertexts(ciphertexts: List[Ciphertext]) -> Ciphertext:
+    result = Ciphertext(1, 1)
+    for ct in ciphertexts:
+        result = result * ct
+    return result
 
 @dataclass
 class PartialDecryption: # Chaum-Pedersen proof
