@@ -14,6 +14,8 @@ from crypto.elgamal import (
     Ciphertext, combine_ciphertexts,
     PartialDecryption, verify_partial_decryption, combine_partial_decryptions,
 )
+from crypto.zkp import BallotProof, verify_ballot_proof
+
 
 class Phase(str, Enum):
     SETUP     = "SETUP" #authorities run DKG, publish election parameters
@@ -61,19 +63,38 @@ class ElectionParams:
 
 @dataclass
 class Ballot:
+    voter_nullifier: str               # H(voter_secret || election_id)
     ciphertext:      Ciphertext
+    zkp:             BallotProof
     merkle_proof:    List[Tuple[str, str]]   # [(sibling_hash, side), ...]
     leaf_index:      int
 
     def to_dict(self) -> dict:
-        pass
+        return {
+            "voter_nullifier": self.voter_nullifier,
+            "ciphertext":      self.ciphertext.to_dict(),
+            "zkp":             self.zkp.to_dict(),
+            "merkle_proof":    self.merkle_proof,
+            "leaf_index":      self.leaf_index,
+        }
 
     @staticmethod
     def from_dict(d: dict) -> "Ballot":
-        pass
+        return Ballot(
+            voter_nullifier=d["voter_nullifier"],
+            ciphertext=Ciphertext.from_dict(d["ciphertext"]),
+            zkp=BallotProof.from_dict(d["zkp"]),
+            merkle_proof=[tuple(x) for x in d["merkle_proof"]],
+            leaf_index=int(d["leaf_index"]),
+        )
 
-    def is_valid():
-        pass
+    def is_valid(self, election_pk, election_id):
+        return verify_ballot_proof(
+            self.zkp,
+            self.ciphertext,
+            election_pk,
+            election_id,
+        )
 
 
 # Transaction types
@@ -149,8 +170,14 @@ class ElectionState:
         if self.params is None:
             return False, "No election params"
 
-        # TODO check if voter nullifier is in nullifiers
-        # TODO check validity of ballot choice
+        # check if voter nullifier is in nullifiers
+        if ballot.voter_nullifier in self.nullifiers:
+            return False, "Nullifier already used (double vote attempt)"
+
+        # check validity of ballot choice
+        if not ballot.is_valid(self.params.public_key, self.params.election_id):
+            return False, "Invalid ballot ZKP"
+
         return True, "ok"
 
     def validate_partial_decryption(self, pd: PartialDecryption) -> Tuple[bool, str]:
