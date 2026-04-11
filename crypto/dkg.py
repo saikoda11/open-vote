@@ -31,7 +31,8 @@ def _eval_poly(coeffs: List[int], x: int) -> int:
     return result
 
 def _verify_key_shares(authority_ids, commitments, sk_shares):
-    for auth_j in authority_ids:
+    for j_idx, auth_j in enumerate(authority_ids):
+        x = j_idx + 1
         sk_j = sk_shares[auth_j]
 
         # Feldman verification (each authority can verify their own share):
