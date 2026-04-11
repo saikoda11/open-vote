@@ -21,6 +21,11 @@ class MerkleTree:
         ]
         self.tree: List[List[str]] = self.build()
 
+    
+    @property
+    def root(self) -> str:
+        return self.tree[-1][0]
+
 
     def build(self):
         """
