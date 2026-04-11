@@ -1,10 +1,14 @@
 import argparse
+import hashlib
 import sys
 import json
 from typing import Any, Dict
 
 import httpx
 from crypto.merkle import verify_merkle_proof
+from crypto.elgamal import encrypt
+from crypto.zkp import prove_ballot
+from election import Ballot
 
 class Vote:
     def __init__(self, voter_data: Dict[str, Any]):
@@ -15,6 +19,12 @@ class Vote:
         self.leaf_index = int(voter_data["leaf_index"])
         self.merkle_proof = [tuple(x) for x in voter_data["merkle_proof"]]
         self.merkle_root = voter_data["merkle_root"]
+
+    def _compute_nullifier(self, election_id: str) -> str:
+        h = hashlib.sha256()
+        h.update(self.secret.to_bytes(128, "big"))
+        h.update(election_id.encode("utf-8"))
+        return h.hexdigest()
 
     @staticmethod
     def from_json(json):
@@ -33,8 +43,32 @@ class Vote:
             sys.exit(1)
     
     def to_ballot(self, election_params: Dict[str, Any]):
-        # TODO Build ballot with Nullifier, ZKP and encrypted message
-        return None
+        # Build ballot with Nullifier, ZKP and encrypted message
+        public_key = election_params["public_key"]
+        election_id = election_params["election_id"]
+        # Nullifier
+        nullifier = self._compute_nullifier(election_id)
+        print(f"[voter] Nullifier: {nullifier[:16]}...")
+
+        # Encrypt ballot
+        ct, randomness = encrypt(self.candidate, public_key)
+        print(f"[voter] Ballot encrypted")
+
+        # ZKP
+        proof = prove_ballot(self.candidate, randomness, ct, public_key, election_id)
+        print(f"[voter] ZKP generated")
+        # voter_nullifier=d["voter_nullifier"],
+        # ciphertext=Ciphertext.from_dict(d["ciphertext"]),
+        # zkp=BallotProof.from_dict(d["zkp"]),
+        # merkle_proof=[tuple(x) for x in d["merkle_proof"]],
+        # leaf_index=int(d["leaf_index"]),
+        return Ballot.from_dict({
+            "voter_nullifier": nullifier,
+            "ciphertext": ct,
+            "zkp": proof,
+            "merkle_proof": self.merkle_proof,
+            "leaf_index": self.leaf_index
+        })
 
 def cast_vote(voter_id: str, candidate: int, node_url: str) -> None:
     with open("voter_roll.json") as f:
@@ -57,7 +91,7 @@ def cast_vote(voter_id: str, candidate: int, node_url: str) -> None:
     params = r.json()
     
     vote.validate(election_params=params)
-    ballot = vote.to_ballot()
+    ballot = vote.to_ballot(election_params=params)
     print(f"[voter] Casting vote for candidate {candidate} ({params['candidates'][candidate]})")
     print(f"[voter] Election: {params['election_id']}")
 
