@@ -248,6 +248,9 @@ async def submit_partial_decrypt(tx: PartialDecryptTx):
 @app.post("/election/tally")
 async def finalize_tally():
     state = get_election_state()
+    if state.phase.value == "FINISHED":
+        estate = election_state()
+        return estate['tally']
     if state.phase.value != "TALLYING":
         raise HTTPException(400, f"Not in TALLYING phase (current: {state.phase})")
     if len(state.partial_decryptions) < state.params.threshold:
