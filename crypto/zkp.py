@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
-from crypto.group import (
+from crypto.prime_group import (
     P, Q, G,
     group_exp, group_mul, group_inv,
     rand_scalar, hash_to_scalar,
