@@ -181,6 +181,7 @@ def cmd_tally(node_url: str) -> None:
     r = httpx.post(f"{node_url}/election/tally", timeout=10)
     if r.status_code == 200:
         print(f"[tally] Tally finalized ✓")
+        print(r.json())
     else:
         print(f"[tally] Failed: {r.status_code}: {r.text}")
         sys.exit(1)

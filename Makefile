@@ -6,3 +6,6 @@ stop :
 
 clean :
 	sh scripts/clean.sh
+
+demo :
+	sh scripts/demo.sh
