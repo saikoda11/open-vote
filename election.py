@@ -145,12 +145,15 @@ class ElectionState:
             if self.phase == Phase.SETUP:
                 self.phase = Phase.VOTING
         elif t == "BALLOT":
-            pass
+            ballot = Ballot.from_dict(value["ballot"])
+            self.ballots.append(ballot)
+            self.nullifiers.add(ballot.voter_nullifier)
         elif t == "CLOSE_VOTING":
             if self.phase == Phase.VOTING:
                 self.phase = Phase.TALLYING
         elif t == "PARTIAL_DECRYPT":
-            pass
+            pd = PartialDecryption.from_dict(value["pd"])
+            self.partial_decryptions.append(pd)
         elif t == "TALLY":
             self.tally = value["result"]
             self.phase = Phase.FINISHED
