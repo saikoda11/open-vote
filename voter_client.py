@@ -62,13 +62,13 @@ class Vote:
         # zkp=BallotProof.from_dict(d["zkp"]),
         # merkle_proof=[tuple(x) for x in d["merkle_proof"]],
         # leaf_index=int(d["leaf_index"]),
-        return Ballot.from_dict({
-            "voter_nullifier": nullifier,
-            "ciphertext": ct,
-            "zkp": proof,
-            "merkle_proof": self.merkle_proof,
-            "leaf_index": self.leaf_index
-        })
+        return Ballot(
+            voter_nullifier=nullifier,
+            ciphertext=ct,
+            zkp=proof,
+            merkle_proof=self.merkle_proof,
+            leaf_index=self.leaf_index,
+        )
 
 def cast_vote(voter_id: str, candidate: int, node_url: str) -> None:
     with open("voter_roll.json") as f:
