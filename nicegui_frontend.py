@@ -31,7 +31,6 @@ def main_page() -> None:
 
     with ui.tab_panels(tabs, value=authority_tab).classes("w-full"):
         with ui.tab_panel(authority_tab):
-            # NEW: Authority inputs and command logic
             node = ui.input("Node URL", value="http://127.0.0.1:8001").classes("w-full")
             authority_id = ui.select(
                 ["node1", "node2", "node3"], value="node1", label="Authority"
@@ -57,7 +56,35 @@ def main_page() -> None:
                 ui.button("Tally", on_click=lambda: run_authority("tally"))
 
         with ui.tab_panel(voter_tab):
-            ui.label("Voter panel coming soon...")
+            # NEW: Voter inputs and command logic
+            node_v = ui.input("Node URL", value="http://127.0.0.1:8001").classes("w-full")
+            voter_id = ui.input("Voter ID", value="alice").classes("w-full")
+            candidate = ui.select(
+                {0: "0 (first candidate)", 1: "1 (second candidate)"},
+                value=0,
+                label="Candidate",
+            ).classes("w-full")
+            voter_out = ui.textarea("Output").props("readonly autogrow").classes("w-full")
+
+            def cast_vote() -> None:
+                try:
+                    voter_out.value = run_cmd(
+                        [
+                            "voter_client.py",
+                            "--voter-id",
+                            voter_id.value,
+                            "--candidate",
+                            str(candidate.value),
+                            "--node",
+                            node_v.value,
+                        ]
+                    )
+                    ui.notify("Vote cast succeeded")
+                except Exception as exc:
+                    voter_out.value = str(exc)
+                    ui.notify("Vote cast failed", color="negative")
+
+            ui.button("Cast Vote", on_click=cast_vote)
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(title="Open vote")
